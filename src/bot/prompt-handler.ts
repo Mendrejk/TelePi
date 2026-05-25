@@ -304,8 +304,8 @@ async function runPromptFlow(
     if (finalStats && finalUsage) {
       const currentCost = finalStats.cost;
       const turnCost = currentCost - previousCost;
-      const contextPercent = finalUsage.percent != null ? Math.round(finalUsage.percent * 100) : 0;
-      statsFooter = `\n\n<i>Context: ${contextPercent}% | Cost: $${currentCost.toFixed(3)} (+$${Math.max(0, turnCost).toFixed(3)})</i>`;
+      const contextPercent = finalUsage.percent != null ? Math.round(finalUsage.percent) : 0;
+      statsFooter = `\n\n_Context: ${contextPercent}% | Cost: $${currentCost.toFixed(3)} (+$${Math.max(0, turnCost).toFixed(3)})_`;
     }
 
     const finalText = buildFinalResponseText(accumulatedText);
