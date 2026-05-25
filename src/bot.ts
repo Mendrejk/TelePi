@@ -767,6 +767,26 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
     await getExistingSession(target)?.abort();
   });
 
+  bot.callbackQuery("pi_compact", async (ctx) => {
+    const target = getTelegramTarget(ctx);
+    await ctx.answerCallbackQuery({ text: "Compacting session..." });
+    if (!target) {
+      return;
+    }
+
+    const piSession = getExistingSession(target);
+    if (!piSession?.hasActiveSession()) {
+      return;
+    }
+
+    if (isBusy(target)) {
+      await sendBusyReply(ctx);
+      return;
+    }
+
+    await piSession.getSession().compact();
+  });
+
   bot.callbackQuery(NOOP_PAGE_CALLBACK_DATA, async (ctx) => {
     await ctx.answerCallbackQuery();
   });
