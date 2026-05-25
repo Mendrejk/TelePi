@@ -86,6 +86,9 @@ async function runPromptFlow(
     return;
   }
 
+  const previousStats = piSession.getSessionStats();
+  const previousCost = previousStats?.cost ?? 0;
+
   const slashCommands = preloadedSlashCommands;
   if (slashCommands) {
     void syncChatScopedCommands(target, slashCommands).catch((error) => {
@@ -243,30 +246,38 @@ async function runPromptFlow(
     }
   };
 
-  const deliverRenderedChunks = async (chunks: RenderedChunk[]): Promise<void> => {
+  const deliverRenderedChunks = async (chunks: RenderedChunk[], lastChunkReplyMarkup?: InlineKeyboard): Promise<void> => {
     if (chunks.length === 0) {
       return;
     }
 
     const [firstChunk, ...remainingChunks] = chunks;
+    const isOnlyChunk = remainingChunks.length === 0;
+    const firstChunkMarkup = isOnlyChunk && lastChunkReplyMarkup ? lastChunkReplyMarkup : new InlineKeyboard();
+
     if (responseMessageId) {
       await safeEditMessage(bot, target, responseMessageId, firstChunk.text, {
         parseMode: firstChunk.parseMode,
         fallbackText: firstChunk.fallbackText,
+        replyMarkup: firstChunkMarkup,
       });
-      await removeAbortKeyboard();
     } else {
       const message = await sendTextMessage(bot.api, target, firstChunk.text, {
         parseMode: firstChunk.parseMode,
         fallbackText: firstChunk.fallbackText,
+        replyMarkup: firstChunkMarkup,
       });
       responseMessageId = message.message_id;
     }
 
-    for (const chunk of remainingChunks) {
+    for (let i = 0; i < remainingChunks.length; i++) {
+      const chunk = remainingChunks[i];
+      const isLast = i === remainingChunks.length - 1;
+      const chunkMarkup = isLast ? lastChunkReplyMarkup : undefined;
       await sendTextMessage(bot.api, target, chunk.text, {
         parseMode: chunk.parseMode,
         fallbackText: chunk.fallbackText,
+        replyMarkup: chunkMarkup,
       });
     }
   };
@@ -287,21 +298,33 @@ async function runPromptFlow(
       }
     }
 
+    const finalStats = piSession.getSessionStats();
+    const finalUsage = piSession.getContextUsage();
+    let statsFooter = "";
+    if (finalStats && finalUsage) {
+      const currentCost = finalStats.cost;
+      const turnCost = currentCost - previousCost;
+      const contextPercent = finalUsage.percent != null ? Math.round(finalUsage.percent * 100) : 0;
+      statsFooter = `\n\n<i>Context: ${contextPercent}% | Cost: $${currentCost.toFixed(3)} (+$${Math.max(0, turnCost).toFixed(3)})</i>`;
+    }
+
     const finalText = buildFinalResponseText(accumulatedText);
-    if (!finalText) {
+    const textWithFooter = finalText ? `${finalText}${statsFooter}` : statsFooter;
+    const keyboard = new InlineKeyboard().text("🗜️ Compact Session", "pi_compact");
+
+    if (!textWithFooter) {
       const html = "<b>✅ Done</b>";
       const plainText = "✅ Done";
 
       if (responseMessageId) {
-        await safeEditMessage(bot, target, responseMessageId, html, { fallbackText: plainText });
-        await removeAbortKeyboard();
+        await safeEditMessage(bot, target, responseMessageId, html, { fallbackText: plainText, replyMarkup: keyboard });
       } else {
-        await safeReply(ctx, html, { fallbackText: plainText }, target);
+        await safeReply(ctx, html, { fallbackText: plainText, replyMarkup: keyboard }, target);
       }
       return;
     }
 
-    await deliverRenderedChunks(splitMarkdownForTelegram(finalText));
+    await deliverRenderedChunks(splitMarkdownForTelegram(textWithFooter), keyboard);
   };
 
   await piSession.bindExtensions({
@@ -483,10 +506,23 @@ async function runPromptFlow(
     } else {
       finalized = true;
 
+      const finalStats = piSession.getSessionStats();
+      const finalUsage = piSession.getContextUsage();
+      let statsFooter = "";
+      if (finalStats && finalUsage) {
+        const currentCost = finalStats.cost;
+        const turnCost = currentCost - previousCost;
+        const contextPercent = finalUsage.percent != null ? Math.round(finalUsage.percent * 100) : 0;
+        statsFooter = `\n\n<i>Context: ${contextPercent}% | Cost: $${currentCost.toFixed(3)} (+$${Math.max(0, turnCost).toFixed(3)})</i>`;
+      }
+
       const combinedText = buildFinalResponseText(renderPromptFailure(accumulatedText, error));
-      const chunks = splitMarkdownForTelegram(combinedText);
+      const textWithFooter = combinedText ? `${combinedText}${statsFooter}` : statsFooter;
+      const chunks = splitMarkdownForTelegram(textWithFooter);
+      const keyboard = new InlineKeyboard().text("🗜️ Compact Session", "pi_compact");
+
       try {
-        await deliverRenderedChunks(chunks);
+        await deliverRenderedChunks(chunks, keyboard);
       } catch (telegramError) {
         console.error("Failed to send error message to Telegram:", telegramError);
       }
