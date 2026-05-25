@@ -1202,7 +1202,7 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
       const imageBytes = await readFile(tempFilePath);
       const imageMimeType = resolveImageMimeType(tempFilePath, documentMimeType);
       promptText = ctx.message.caption?.trim() || DEFAULT_IMAGE_PROMPT;
-      const preview = truncateText(promptText.replace(/\s+/g, " "), 240);
+      const preview = truncateText(promptText.replace(/\s+/g, " "), 4000);
       images = [{
         type: "image",
         data: imageBytes.toString("base64"),
@@ -1270,7 +1270,7 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
         return;
       }
 
-      const preview = truncateText(transcript.replace(/\s+/g, " "), 240);
+      const preview = truncateText(transcript.replace(/\s+/g, " "), 4000);
       await safeReply(
         ctx,
         `🎤 ${escapeHTML(preview)} <i>(via ${escapeHTML(result.backend)})</i>`,
