@@ -210,7 +210,7 @@ export function parseAllowedUserIds(raw: string): number[] {
     .filter(Boolean)
     .map((value) => {
       const parsed = Number(value);
-      if (!Number.isInteger(parsed) || parsed <= 0) {
+      if (!Number.isInteger(parsed)) {
         throw new Error(`Invalid Telegram user id in TELEGRAM_ALLOWED_USER_IDS: ${value}`);
       }
       return parsed;
