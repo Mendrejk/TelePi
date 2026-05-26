@@ -3,6 +3,8 @@ import { getPiSessionContextKey } from "../pi-session.js";
 
 export interface BotChatState {
   isLocallyBusy(target: PiSessionContext): boolean;
+  isSteeringModeEnabled(target: PiSessionContext): boolean;
+  toggleSteeringMode(target: PiSessionContext): boolean;
   beginProcessing(target: PiSessionContext, promptText: string): void;
   endProcessing(target: PiSessionContext): void;
   beginSwitching(target: PiSessionContext): void;
@@ -17,6 +19,7 @@ export function createBotChatState(): BotChatState {
   const processingContexts = new Set<string>();
   const switchingContexts = new Set<string>();
   const transcribingContexts = new Set<string>();
+  const steeringModes = new Set<string>();
   const lastPrompts = new Map<string, string>();
 
   const getContextKey = (target: PiSessionContext): string => getPiSessionContextKey(target);
@@ -29,6 +32,21 @@ export function createBotChatState(): BotChatState {
         switchingContexts.has(contextKey) ||
         transcribingContexts.has(contextKey)
       );
+    },
+
+    isSteeringModeEnabled(target) {
+      return steeringModes.has(getContextKey(target));
+    },
+
+    toggleSteeringMode(target) {
+      const contextKey = getContextKey(target);
+      if (steeringModes.has(contextKey)) {
+        steeringModes.delete(contextKey);
+        return false;
+      } else {
+        steeringModes.add(contextKey);
+        return true;
+      }
     },
 
     beginProcessing(target, promptText) {

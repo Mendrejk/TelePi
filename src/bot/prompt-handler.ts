@@ -45,6 +45,7 @@ interface CreatePromptHandlerOptions {
   editDebounceMs: number;
   typingIntervalMs: number;
   isBusy: (target: PiSessionContext) => boolean;
+  isSteeringModeEnabled: (target: PiSessionContext) => boolean;
   taskRunner: ChatTaskRunner;
   ensureActiveSession: (ctx: Context, target: PiSessionContext) => Promise<PiSessionService | undefined>;
   syncChatScopedCommands: (target: PiSessionContext, slashCommands: SlashCommandInfo[]) => Promise<void>;
@@ -53,7 +54,7 @@ interface CreatePromptHandlerOptions {
   sendBusyReply: (ctx: Context) => Promise<void>;
 }
 
-type PromptFlowDeps = Omit<CreatePromptHandlerOptions, "isBusy" | "taskRunner" | "sendBusyReply">;
+type PromptFlowDeps = Omit<CreatePromptHandlerOptions, "isBusy" | "isSteeringModeEnabled" | "taskRunner" | "sendBusyReply">;
 
 type ToolState = {
   toolName: string;
@@ -84,6 +85,15 @@ async function runPromptFlow(
   const piSession = await ensureActiveSession(ctx, target);
   if (!piSession) {
     return;
+  }
+
+  try {
+    piSession.getSession().sessionManager.appendCustomEntry("telepi_target", {
+      chatId: target.chatId,
+      threadId: target.messageThreadId,
+    });
+  } catch (error) {
+    console.error("Failed to append telepi_target entry", error);
   }
 
   const previousStats = piSession.getSessionStats();
@@ -310,7 +320,9 @@ async function runPromptFlow(
 
     const finalText = buildFinalResponseText(accumulatedText);
     const textWithFooter = finalText ? `${finalText}${statsFooter}` : statsFooter;
-    const keyboard = new InlineKeyboard().text("🗜️ Compact Session", "pi_compact");
+    const keyboard = new InlineKeyboard()
+      .text("🗜️ Compact Session", "pi_compact")
+      .text("🔊 Toggle Voice", "pi_tts_toggle");
 
     if (!textWithFooter) {
       const html = "<b>✅ Done</b>";
@@ -519,7 +531,9 @@ async function runPromptFlow(
       const combinedText = buildFinalResponseText(renderPromptFailure(accumulatedText, error));
       const textWithFooter = combinedText ? `${combinedText}${statsFooter}` : statsFooter;
       const chunks = splitMarkdownForTelegram(textWithFooter);
-      const keyboard = new InlineKeyboard().text("🗜️ Compact Session", "pi_compact");
+      const keyboard = new InlineKeyboard()
+        .text("🗜️ Compact Session", "pi_compact")
+        .text("🔊 Toggle Voice", "pi_tts_toggle");
 
       try {
         await deliverRenderedChunks(chunks, keyboard);
@@ -537,8 +551,10 @@ async function runPromptFlow(
 export function createPromptHandler(options: CreatePromptHandlerOptions): HandleUserPrompt {
   const {
     isBusy,
+    isSteeringModeEnabled,
     taskRunner,
     sendBusyReply,
+    ensureActiveSession,
     ...promptFlowDeps
   } = options;
 
@@ -550,6 +566,28 @@ export function createPromptHandler(options: CreatePromptHandlerOptions): Handle
     images?: ImageContent[],
   ): Promise<boolean> => {
     if (isBusy(target)) {
+      if (isSteeringModeEnabled(target)) {
+        const piSession = await ensureActiveSession(ctx, target);
+        if (piSession?.hasActiveSession()) {
+          const agentSession = piSession.getSession();
+          if (agentSession.isStreaming) {
+            try {
+              if (images && images.length > 0) {
+                await agentSession.steer(userText, images);
+              } else {
+                await agentSession.steer(userText);
+              }
+              const html = "<i>Mid-flight steering instructions sent to agent.</i>";
+              const plain = "Mid-flight steering instructions sent to agent.";
+              await sendTextMessage(ctx.api, target, html, { parseMode: "HTML", fallbackText: plain });
+              return true;
+            } catch (error) {
+              console.error("Failed to steer prompt", error);
+            }
+          }
+        }
+      }
+
       await sendBusyReply(ctx);
       return false;
     }
@@ -557,7 +595,7 @@ export function createPromptHandler(options: CreatePromptHandlerOptions): Handle
     const result = taskRunner.tryStartPrompt(
       target,
       userText,
-      () => runPromptFlow(promptFlowDeps, ctx, target, userText, preloadedSlashCommands, images),
+      () => runPromptFlow({ ensureActiveSession, ...promptFlowDeps }, ctx, target, userText, preloadedSlashCommands, images),
     );
     if (result === "busy") {
       await sendBusyReply(ctx);

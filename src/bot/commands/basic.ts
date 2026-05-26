@@ -19,6 +19,7 @@ export function createBasicCommandHandlers(deps: {
     preloadedSlashCommands?: SlashCommandInfo[],
   ) => Promise<boolean>;
   getLastPrompt: (target: PiSessionContext) => string | undefined;
+  toggleSteeringMode: (target: PiSessionContext) => boolean;
   extensionDialogs: { cancelPending: (target: PiSessionContext) => Promise<boolean> };
   getVoiceBackendStatus: () => Promise<{ backends: string[]; warning?: string }>;
   safeReply: (ctx: Context, text: string, options?: TextOptions, target?: PiSessionContext) => Promise<void>;
@@ -31,6 +32,7 @@ export function createBasicCommandHandlers(deps: {
     openCommandPicker,
     handleUserPrompt,
     getLastPrompt,
+    toggleSteeringMode,
     extensionDialogs,
     getVoiceBackendStatus,
     safeReply,
@@ -110,6 +112,13 @@ export function createBasicCommandHandlers(deps: {
     }
   };
 
+  const handleSteerCommand = async (ctx: Context, target: PiSessionContext): Promise<void> => {
+    const isNowSteering = toggleSteeringMode(target);
+    const stateStr = isNowSteering ? "ON" : "OFF";
+    const msg = `Mid-flight steering is now ${stateStr}.\n\nWhen ON, messages sent while the agent is running will be queued as steering instructions instead of being rejected.`;
+    await safeReply(ctx, escapeHTML(msg), { fallbackText: msg }, target);
+  };
+
   const handleSessionCommand = async (ctx: Context, target: PiSessionContext): Promise<void> => {
     const info = sessionRegistry.getInfo(target);
     await safeReply(ctx, renderSessionInfoHTML(info), {
@@ -134,6 +143,7 @@ export function createBasicCommandHandlers(deps: {
     handleHelpCommand,
     handleCommandsCommand,
     handleAbortCommand,
+    handleSteerCommand,
     handleSessionCommand,
     handleRetryCommand,
   };

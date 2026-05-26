@@ -446,6 +446,7 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
     editDebounceMs: EDIT_DEBOUNCE_MS,
     typingIntervalMs: TYPING_INTERVAL_MS,
     isBusy,
+    isSteeringModeEnabled: (target) => chatState.isSteeringModeEnabled(target),
     taskRunner: chatTaskRunner,
     ensureActiveSession,
     syncChatScopedCommands,
@@ -498,6 +499,7 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
     openCommandPicker,
     handleUserPrompt,
     getLastPrompt: (target) => chatState.getLastPrompt(target),
+    toggleSteeringMode: (target) => chatState.toggleSteeringMode(target),
     extensionDialogs,
     getVoiceBackendStatus,
     safeReply,
@@ -507,6 +509,7 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
     handleHelpCommand,
     handleCommandsCommand,
     handleAbortCommand,
+    handleSteerCommand,
     handleSessionCommand,
     handleRetryCommand,
   } = basicCommandHandlers;
@@ -591,6 +594,9 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
       case "abort":
         await handleAbortCommand(ctx, target);
         return;
+      case "steer":
+        await handleSteerCommand(ctx, target);
+        return;
       case "session":
         await handleSessionCommand(ctx, target);
         return;
@@ -665,6 +671,15 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
     }
 
     await handleAbortCommand(ctx, target);
+  });
+
+  bot.command("steer", async (ctx) => {
+    const target = getTelegramTarget(ctx);
+    if (!target) {
+      return;
+    }
+
+    await handleSteerCommand(ctx, target);
   });
 
   bot.command("session", async (ctx) => {
@@ -785,6 +800,26 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
     }
 
     await piSession.getSession().compact();
+  });
+
+  bot.callbackQuery("pi_tts_toggle", async (ctx) => {
+    const target = getTelegramTarget(ctx);
+    await ctx.answerCallbackQuery({ text: "Toggling TTS..." });
+    if (!target) {
+      return;
+    }
+
+    const piSession = getExistingSession(target);
+    if (!piSession?.hasActiveSession()) {
+      return;
+    }
+
+    if (isBusy(target)) {
+      await sendBusyReply(ctx);
+      return;
+    }
+
+    await piSession.getSession().steer("/tts_toggle");
   });
 
   bot.callbackQuery(NOOP_PAGE_CALLBACK_DATA, async (ctx) => {
