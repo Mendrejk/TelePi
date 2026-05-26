@@ -139,7 +139,7 @@ async function runPromptFlow(
   };
 
   const renderPreview = (): RenderedChunk => {
-    const previewText = buildStreamingPreview(accumulatedText);
+    const previewText = buildStreamingPreview(accumulatedText || "_Processing..._");
     return renderMarkdownChunkWithinLimit(previewText);
   };
 
@@ -187,7 +187,7 @@ async function runPromptFlow(
   };
 
   const flushResponse = async (force = false): Promise<void> => {
-    if (!accumulatedText) {
+    if (!accumulatedText && !force) {
       return;
     }
     if (!responseMessageId) {
@@ -385,6 +385,10 @@ async function runPromptFlow(
         console.error("Failed to send extension error", sendError);
       });
     },
+  });
+
+  void ensureResponseMessage().catch((error) => {
+    console.error("Failed to send initial Telegram response message", error);
   });
 
   const unsubscribe = piSession.subscribe({
