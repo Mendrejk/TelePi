@@ -16,6 +16,7 @@ export const TELEPI_BOT_COMMANDS = [
   { command: "handback", description: "Hand session back to Pi CLI" },
   { command: "abort", description: "Cancel current operation" },
   { command: "steer", description: "Toggle mid-flight prompt steering mode" },
+  { command: "tools", description: "Toggle live tool output streaming" },
   { command: "compact", description: "Compact session context" },
   { command: "session", description: "Current session details" },
   { command: "sessions", description: "List and switch sessions (or /sessions <path|id>)" },

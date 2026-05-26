@@ -41,7 +41,7 @@ export type HandleUserPrompt = (
 
 interface CreatePromptHandlerOptions {
   bot: Bot<Context>;
-  toolVerbosity: ToolVerbosity;
+  getToolVerbosity: (target: PiSessionContext) => ToolVerbosity;
   editDebounceMs: number;
   typingIntervalMs: number;
   isBusy: (target: PiSessionContext) => boolean;
@@ -73,7 +73,7 @@ async function runPromptFlow(
 ): Promise<void> {
   const {
     bot,
-    toolVerbosity,
+    getToolVerbosity,
     editDebounceMs,
     typingIntervalMs,
     ensureActiveSession,
@@ -120,6 +120,7 @@ async function runPromptFlow(
   let isFlushing = false;
   let flushPending = false;
   let finalized = false;
+  const toolVerbosity = getToolVerbosity(target);
 
   const typingInterval = setInterval(() => {
     void sendChatAction(bot.api, target, "typing").catch(() => {});

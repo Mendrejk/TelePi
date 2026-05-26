@@ -5,6 +5,8 @@ export interface BotChatState {
   isLocallyBusy(target: PiSessionContext): boolean;
   isSteeringModeEnabled(target: PiSessionContext): boolean;
   toggleSteeringMode(target: PiSessionContext): boolean;
+  isLiveToolOutputEnabled(target: PiSessionContext): boolean;
+  toggleLiveToolOutput(target: PiSessionContext): boolean;
   beginProcessing(target: PiSessionContext, promptText: string): void;
   endProcessing(target: PiSessionContext): void;
   beginSwitching(target: PiSessionContext): void;
@@ -20,6 +22,7 @@ export function createBotChatState(): BotChatState {
   const switchingContexts = new Set<string>();
   const transcribingContexts = new Set<string>();
   const steeringModes = new Set<string>();
+  const liveToolOutputs = new Set<string>();
   const lastPrompts = new Map<string, string>();
 
   const getContextKey = (target: PiSessionContext): string => getPiSessionContextKey(target);
@@ -45,6 +48,21 @@ export function createBotChatState(): BotChatState {
         return false;
       } else {
         steeringModes.add(contextKey);
+        return true;
+      }
+    },
+
+    isLiveToolOutputEnabled(target) {
+      return liveToolOutputs.has(getContextKey(target));
+    },
+
+    toggleLiveToolOutput(target) {
+      const contextKey = getContextKey(target);
+      if (liveToolOutputs.has(contextKey)) {
+        liveToolOutputs.delete(contextKey);
+        return false;
+      } else {
+        liveToolOutputs.add(contextKey);
         return true;
       }
     },

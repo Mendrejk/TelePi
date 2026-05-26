@@ -442,7 +442,7 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
 
   const handleUserPrompt = createPromptHandler({
     bot,
-    toolVerbosity: config.toolVerbosity,
+    getToolVerbosity: (target) => chatState.isLiveToolOutputEnabled(target) ? "all" : config.toolVerbosity,
     editDebounceMs: EDIT_DEBOUNCE_MS,
     typingIntervalMs: TYPING_INTERVAL_MS,
     isBusy,
@@ -500,6 +500,7 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
     handleUserPrompt,
     getLastPrompt: (target) => chatState.getLastPrompt(target),
     toggleSteeringMode: (target) => chatState.toggleSteeringMode(target),
+    toggleLiveToolOutput: (target) => chatState.toggleLiveToolOutput(target),
     extensionDialogs,
     getVoiceBackendStatus,
     safeReply,
@@ -510,6 +511,7 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
     handleCommandsCommand,
     handleAbortCommand,
     handleSteerCommand,
+    handleToolsCommand,
     handleSessionCommand,
     handleRetryCommand,
   } = basicCommandHandlers;
@@ -597,6 +599,9 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
       case "steer":
         await handleSteerCommand(ctx, target);
         return;
+      case "tools":
+        await handleToolsCommand(ctx, target);
+        return;
       case "session":
         await handleSessionCommand(ctx, target);
         return;
@@ -680,6 +685,15 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
     }
 
     await handleSteerCommand(ctx, target);
+  });
+
+  bot.command("tools", async (ctx) => {
+    const target = getTelegramTarget(ctx);
+    if (!target) {
+      return;
+    }
+
+    await handleToolsCommand(ctx, target);
   });
 
   bot.command("session", async (ctx) => {

@@ -20,6 +20,7 @@ export function createBasicCommandHandlers(deps: {
   ) => Promise<boolean>;
   getLastPrompt: (target: PiSessionContext) => string | undefined;
   toggleSteeringMode: (target: PiSessionContext) => boolean;
+  toggleLiveToolOutput: (target: PiSessionContext) => boolean;
   extensionDialogs: { cancelPending: (target: PiSessionContext) => Promise<boolean> };
   getVoiceBackendStatus: () => Promise<{ backends: string[]; warning?: string }>;
   safeReply: (ctx: Context, text: string, options?: TextOptions, target?: PiSessionContext) => Promise<void>;
@@ -33,6 +34,7 @@ export function createBasicCommandHandlers(deps: {
     handleUserPrompt,
     getLastPrompt,
     toggleSteeringMode,
+    toggleLiveToolOutput,
     extensionDialogs,
     getVoiceBackendStatus,
     safeReply,
@@ -119,6 +121,13 @@ export function createBasicCommandHandlers(deps: {
     await safeReply(ctx, escapeHTML(msg), { fallbackText: msg }, target);
   };
 
+  const handleToolsCommand = async (ctx: Context, target: PiSessionContext): Promise<void> => {
+    const isNowLive = toggleLiveToolOutput(target);
+    const stateStr = isNowLive ? "ON" : "OFF";
+    const msg = `Live tool output streaming is now ${stateStr}.\n\nWhen ON, background terminal commands and Pi tool usages will stream raw output into the chat directly.`;
+    await safeReply(ctx, escapeHTML(msg), { fallbackText: msg }, target);
+  };
+
   const handleSessionCommand = async (ctx: Context, target: PiSessionContext): Promise<void> => {
     const info = sessionRegistry.getInfo(target);
     await safeReply(ctx, renderSessionInfoHTML(info), {
@@ -144,6 +153,7 @@ export function createBasicCommandHandlers(deps: {
     handleCommandsCommand,
     handleAbortCommand,
     handleSteerCommand,
+    handleToolsCommand,
     handleSessionCommand,
     handleRetryCommand,
   };
