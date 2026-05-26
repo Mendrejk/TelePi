@@ -1235,13 +1235,25 @@ export class PiSessionRegistry {
   private readonly inflight = new Map<string, Promise<PiSessionService>>();
   private readonly generations = new Map<string, number>();
   private bootstrapSessionPath?: string;
+  private readonly savedSessionPaths: Map<string, string>;
+  private readonly onSessionPathChange?: (key: string, path: string | undefined) => void;
 
-  private constructor(private readonly config: TelePiConfig) {
+  private constructor(
+    private readonly config: TelePiConfig,
+    savedSessionPaths?: Map<string, string>,
+    onSessionPathChange?: (key: string, path: string | undefined) => void,
+  ) {
     this.bootstrapSessionPath = config.piSessionPath;
+    this.savedSessionPaths = savedSessionPaths ?? new Map();
+    this.onSessionPathChange = onSessionPathChange;
   }
 
-  static async create(config: TelePiConfig): Promise<PiSessionRegistry> {
-    return new PiSessionRegistry(config);
+  static async create(
+    config: TelePiConfig,
+    savedSessionPaths?: Map<string, string>,
+    onSessionPathChange?: (key: string, path: string | undefined) => void,
+  ): Promise<PiSessionRegistry> {
+    return new PiSessionRegistry(config, savedSessionPaths, onSessionPathChange);
   }
 
   has(context: PiSessionContext): boolean {
@@ -1276,7 +1288,7 @@ export class PiSessionRegistry {
     }
 
     const generation = this.bumpGeneration(key);
-    const createPromise = PiSessionService.create(this.createServiceConfig())
+    const createPromise = PiSessionService.create(this.createServiceConfig(key))
       .then((service) => {
         this.inflight.delete(key);
 
@@ -1290,6 +1302,7 @@ export class PiSessionRegistry {
         }
 
         this.services.set(key, service);
+        this.trackServiceSessionPath(key, service);
         return service;
       })
       .catch((error) => {
@@ -1322,8 +1335,8 @@ export class PiSessionRegistry {
     this.inflight.clear();
   }
 
-  private createServiceConfig(): TelePiConfig {
-    const initialSessionPath = this.consumeBootstrapSessionPath();
+  private createServiceConfig(key: string): TelePiConfig {
+    const initialSessionPath = this.consumeBootstrapSessionPath() ?? this.savedSessionPaths.get(key);
     return {
       ...this.config,
       telegramAllowedUserIdSet: new Set(this.config.telegramAllowedUserIds),
@@ -1335,6 +1348,32 @@ export class PiSessionRegistry {
     const sessionPath = this.bootstrapSessionPath;
     this.bootstrapSessionPath = undefined;
     return sessionPath;
+  }
+
+  private trackServiceSessionPath(key: string, service: PiSessionService): void {
+    if (!this.onSessionPathChange) {
+      return;
+    }
+
+    const checkAndUpdate = () => {
+      const info = service.getInfo();
+      if (info.sessionFile) {
+        const saved = this.savedSessionPaths.get(key);
+        if (saved !== info.sessionFile) {
+          this.savedSessionPaths.set(key, info.sessionFile);
+          this.onSessionPathChange!(key, info.sessionFile);
+        }
+      }
+    };
+
+    // Check immediately and then poll periodically. A session can change via commands.
+    checkAndUpdate();
+    const interval = setInterval(checkAndUpdate, 5000);
+    const originalDispose = service.dispose.bind(service);
+    service.dispose = async () => {
+      clearInterval(interval);
+      return originalDispose();
+    };
   }
 
   private bumpGeneration(key: string): number {

@@ -2,9 +2,40 @@ import { createBot, registerCommands } from "./bot.js";
 import { loadConfig } from "./config.js";
 import { isEntrypoint } from "./entrypoint.js";
 import { PiSessionRegistry } from "./pi-session.js";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import path from "node:path";
 
 const MAX_RESTART_ATTEMPTS = 5;
 const RESTART_DELAY_MS = 3000;
+
+function loadSessionMapping(): Map<string, string> {
+  const mappingPath = path.join(homedir(), ".local/state/telepi/session-mapping.json");
+  if (!existsSync(mappingPath)) {
+    return new Map();
+  }
+  try {
+    const data = JSON.parse(readFileSync(mappingPath, "utf8"));
+    return new Map(Object.entries(data));
+  } catch (error) {
+    console.error("Failed to parse session mapping:", error);
+    return new Map();
+  }
+}
+
+function saveSessionMapping(mapping: Map<string, string>): void {
+  const stateDir = path.join(homedir(), ".local/state/telepi");
+  if (!existsSync(stateDir)) {
+    mkdirSync(stateDir, { recursive: true });
+  }
+  const mappingPath = path.join(stateDir, "session-mapping.json");
+  try {
+    const data = Object.fromEntries(mapping);
+    writeFileSync(mappingPath, JSON.stringify(data, null, 2), "utf8");
+  } catch (error) {
+    console.error("Failed to save session mapping:", error);
+  }
+}
 
 export async function startBot(): Promise<void> {
   let sessionRegistry: PiSessionRegistry | undefined;
@@ -14,7 +45,13 @@ export async function startBot(): Promise<void> {
 
   try {
     const config = loadConfig();
-    sessionRegistry = await PiSessionRegistry.create(config);
+    const savedSessionPaths = loadSessionMapping();
+    sessionRegistry = await PiSessionRegistry.create(config, savedSessionPaths, (key, sessionPath) => {
+      if (sessionPath) {
+        savedSessionPaths.set(key, sessionPath);
+        saveSessionMapping(savedSessionPaths);
+      }
+    });
     bot = createBot(config, sessionRegistry);
     await registerCommands(bot);
 
