@@ -167,7 +167,6 @@ async function runPromptFlow(
     }
 
     responseMessagePromise = (async () => {
-      stopTyping();
       const preview = renderPreview();
       const message = await sendTextMessage(bot.api, target, preview.text, {
         parseMode: preview.parseMode,
@@ -177,6 +176,7 @@ async function runPromptFlow(
       responseMessageId = message.message_id;
       lastRenderedText = preview.text;
       lastEditAt = Date.now();
+      void sendChatAction(bot.api, target, "typing").catch(() => {});
     })();
 
     try {
