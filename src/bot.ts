@@ -799,7 +799,14 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
       return;
     }
 
-    await piSession.getSession().compact();
+    try {
+      await piSession.getSession().compact();
+      await safeReply(ctx, "✅ <b>Compaction complete.</b>", { fallbackText: "✅ Compaction complete." }, target);
+      await handleContextCommand(ctx, target);
+    } catch (error) {
+      console.error("Compaction failed:", error);
+      await safeReply(ctx, "❌ <b>Compaction failed.</b>", { fallbackText: "❌ Compaction failed." }, target);
+    }
   });
 
   bot.callbackQuery("pi_tts_play", async (ctx) => {
