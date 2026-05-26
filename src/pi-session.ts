@@ -51,7 +51,7 @@ const TELEPI_SELF_MANAGEMENT_ERROR =
 
 export interface PiSessionCallbacks {
   onTextDelta: (delta: string) => void;
-  onToolStart: (toolName: string, toolCallId: string) => void;
+  onToolStart: (toolName: string, toolCallId: string, args?: any) => void;
   onToolUpdate: (toolCallId: string, partialResult: string) => void;
   onToolEnd: (toolCallId: string, isError: boolean) => void;
   onAgentEnd: () => void;
@@ -561,7 +561,7 @@ export function subscribeToSession(
         }
         break;
       case "tool_execution_start":
-        callbacks.onToolStart(event.toolName, event.toolCallId);
+        callbacks.onToolStart(event.toolName, event.toolCallId, event.args);
         break;
       case "tool_execution_update":
         callbacks.onToolUpdate(event.toolCallId, stringifyToolData(event.partialResult));
