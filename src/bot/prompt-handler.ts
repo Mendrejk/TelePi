@@ -111,6 +111,7 @@ async function runPromptFlow(
   const abortKeyboard = new InlineKeyboard().text("⏹ Abort", "pi_abort");
   const toolStates = new Map<string, ToolState>();
   const toolCounts = new Map<string, number>();
+  const activeTools = new Map<string, string>();
   let accumulatedText = "";
   let responseMessageId: number | undefined;
   let responseMessagePromise: Promise<void> | undefined;
@@ -139,7 +140,13 @@ async function runPromptFlow(
   };
 
   const renderPreview = (): RenderedChunk => {
-    const previewText = buildStreamingPreview(accumulatedText || "_Processing..._");
+    let previewText = buildStreamingPreview(accumulatedText || "_Processing..._");
+    
+    if (toolVerbosity === "summary" && activeTools.size > 0) {
+      const names = Array.from(new Set(activeTools.values())).join(", ");
+      previewText += `\n\n_Running tools: ${names}..._`;
+    }
+
     return renderMarkdownChunkWithinLimit(previewText);
   };
 
@@ -187,7 +194,7 @@ async function runPromptFlow(
   };
 
   const flushResponse = async (force = false): Promise<void> => {
-    if (!accumulatedText && !force) {
+    if (!accumulatedText && activeTools.size === 0 && !force) {
       return;
     }
     if (!responseMessageId) {
@@ -408,6 +415,9 @@ async function runPromptFlow(
       scheduleFlush();
     },
     onToolStart: (toolName, toolCallId) => {
+      activeTools.set(toolCallId, toolName);
+      scheduleFlush();
+
       if (toolVerbosity === "summary") {
         toolCounts.set(toolName, (toolCounts.get(toolName) ?? 0) + 1);
         return;
@@ -458,6 +468,9 @@ async function runPromptFlow(
       state.partialResult = appendWithCap(state.partialResult, partialResult, TOOL_OUTPUT_PREVIEW_LIMIT);
     },
     onToolEnd: (toolCallId, isError) => {
+      activeTools.delete(toolCallId);
+      scheduleFlush();
+
       if (toolVerbosity === "none" || toolVerbosity === "summary") {
         return;
       }
