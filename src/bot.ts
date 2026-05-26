@@ -802,9 +802,9 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
     await piSession.getSession().compact();
   });
 
-  bot.callbackQuery("pi_tts_toggle", async (ctx) => {
+  bot.callbackQuery("pi_tts_play", async (ctx) => {
     const target = getTelegramTarget(ctx);
-    await ctx.answerCallbackQuery({ text: "Toggling TTS..." });
+    await ctx.answerCallbackQuery({ text: "Requesting audio..." });
     if (!target) {
       return;
     }
@@ -819,7 +819,7 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
       return;
     }
 
-    await piSession.getSession().steer("/tts_toggle");
+    await handleUserPrompt(ctx, target, "/tts");
   });
 
   bot.callbackQuery(NOOP_PAGE_CALLBACK_DATA, async (ctx) => {

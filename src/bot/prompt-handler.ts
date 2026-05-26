@@ -322,7 +322,7 @@ async function runPromptFlow(
     const textWithFooter = finalText ? `${finalText}${statsFooter}` : statsFooter;
     const keyboard = new InlineKeyboard()
       .text("🗜️ Compact Session", "pi_compact")
-      .text("🔊 Toggle Voice", "pi_tts_toggle");
+      .text("🔊 Read Aloud", "pi_tts_play");
 
     if (!textWithFooter) {
       const html = "<b>✅ Done</b>";
@@ -533,7 +533,7 @@ async function runPromptFlow(
       const chunks = splitMarkdownForTelegram(textWithFooter);
       const keyboard = new InlineKeyboard()
         .text("🗜️ Compact Session", "pi_compact")
-        .text("🔊 Toggle Voice", "pi_tts_toggle");
+        .text("🔊 Read Aloud", "pi_tts_play");
 
       try {
         await deliverRenderedChunks(chunks, keyboard);

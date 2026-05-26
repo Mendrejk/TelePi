@@ -44,7 +44,9 @@ export function createContextCommandHandlers(deps: {
     const plainText = `Context Usage${statsPlain ? "\n\nSession Stats" : ""}\n\n${usagePlain}${statsPlain}`;
     const html = `<b>Context Usage</b>${statsHTML ? "\n\n<b>Session Stats</b>" : ""}\n\n${usageHTML}${statsHTML}`;
 
-    const keyboard = new InlineKeyboard().text("🗜️ Compact Session", "pi_compact");
+    const keyboard = new InlineKeyboard()
+      .text("🗜️ Compact Session", "pi_compact")
+      .text("🔊 Read Aloud", "pi_tts_play");
 
     await safeReply(ctx, html, { fallbackText: plainText, replyMarkup: keyboard }, target);
   };
