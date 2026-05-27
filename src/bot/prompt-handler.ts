@@ -140,6 +140,7 @@ async function runPromptFlow(
   let isFlushing = false;
   let flushPending = false;
   let finalized = false;
+  let agentEnded = false;
   let hasNotifiedText = false;
   const toolVerbosity = getToolVerbosity(target);
 
@@ -453,7 +454,7 @@ async function runPromptFlow(
     },
     uiContext: createTelegramUIContext({
       notify: async (message, type) => {
-        await commitStream();
+        if (!agentEnded && !finalized) await commitStream();
         const rendered = renderExtensionNotice(message, type);
         void sendTextMessage(bot.api, target, rendered.text, {
           parseMode: rendered.parseMode,
@@ -463,20 +464,20 @@ async function runPromptFlow(
         });
       },
       select: async (title, choices, dialogOptions) => {
-        await commitStream();
+        if (!agentEnded && !finalized) await commitStream();
         return extensionDialogs.openSelect(target, title, choices, dialogOptions);
       },
       confirm: async (title, message, dialogOptions) => {
-        await commitStream();
+        if (!agentEnded && !finalized) await commitStream();
         return extensionDialogs.openConfirm(target, title, message, dialogOptions);
       },
       input: async (title, placeholder, dialogOptions) => {
-        await commitStream();
+        if (!agentEnded && !finalized) await commitStream();
         return extensionDialogs.openInput(target, title, placeholder, dialogOptions);
       },
     }),
     onError: async (error) => {
-      await commitStream();
+      if (!agentEnded && !finalized) await commitStream();
       const rendered = renderExtensionError(error.extensionPath, error.event, error.error);
       void sendTextMessage(bot.api, target, rendered.text, {
         parseMode: rendered.parseMode,
@@ -610,6 +611,7 @@ async function runPromptFlow(
       });
     },
     onAgentEnd: () => {
+      agentEnded = true;
       void finalizeResponse().catch((error) => {
         console.error("Failed to finalize Telegram response message", error);
       });
