@@ -307,30 +307,32 @@ async function runPromptFlow(
     if (responseMessagePromise) await responseMessagePromise;
     if (!responseMessageId) return;
     
+    const idToCommit = responseMessageId;
+    responseMessageId = undefined;
+    responseMessagePromise = undefined;
+    lastRenderedText = "";
+
     let unstreamedText = accumulatedText.slice(activeStreamCursor);
     if (!unstreamedText && activeTools.size === 0) {
-      await bot.api.deleteMessage(target.chatId, responseMessageId).catch(() => {});
+      await bot.api.deleteMessage(target.chatId, idToCommit).catch(() => {});
     } else {
       const chunks = splitMarkdownForTelegram(unstreamedText || renderPreview().text);
-      await safeEditMessage(bot, target, responseMessageId, chunks[0].text, {
+      await safeEditMessage(bot, target, idToCommit, chunks[0].text, {
          parseMode: chunks[0].parseMode,
          fallbackText: chunks[0].fallbackText,
       }).catch(() => {});
       activeStreamCursor += unstreamedText ? chunks[0].sourceText.length : 0;
     }
-    
-    responseMessageId = undefined;
-    responseMessagePromise = undefined;
-    lastRenderedText = "";
   };
 
   const deleteProcessingMessage = async (): Promise<void> => {
     if (responseMessagePromise) await responseMessagePromise;
     if (!responseMessageId) return;
-    await bot.api.deleteMessage(target.chatId, responseMessageId).catch(() => {});
+    const idToDelete = responseMessageId;
     responseMessageId = undefined;
     responseMessagePromise = undefined;
     lastRenderedText = "";
+    await bot.api.deleteMessage(target.chatId, idToDelete).catch(() => {});
   };
 
   const deliverRenderedChunks = async (chunks: RenderedChunk[], lastChunkReplyMarkup?: InlineKeyboard): Promise<void> => {
