@@ -26,6 +26,7 @@ import type { Api, ImageContent, Model } from "@mariozechner/pi-ai";
 
 import type { TelePiConfig } from "./config.js";
 import { createProviderResponseNoticeExtension } from "./provider-response-notices.js";
+import { createTelepiSystemPromptExtension } from "./telepi-system-prompt.js";
 import {
   resolveInitialScopedModelSelection,
   resolveScopedModels,
@@ -489,7 +490,10 @@ async function createPiSessionHandle(
       modelRegistry,
       settingsManager,
       resourceLoaderOptions: {
-        extensionFactories: [createProviderResponseNoticeExtension()],
+        extensionFactories: [
+          createProviderResponseNoticeExtension(),
+          createTelepiSystemPromptExtension(),
+        ],
       },
     });
     const configuredModel = resolveModelOverride(services.modelRegistry, config.piModel);

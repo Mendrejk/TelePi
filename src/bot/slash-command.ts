@@ -327,9 +327,15 @@ export function buildChatScopedCommands(
     }
 
     seen.add(name);
+    
+    let description = trimLine(`Pi: ${slashCommand.description ?? slashCommand.source}`, 256);
+    if (description.length < 3) {
+      description += "   ";
+    }
+
     commands.push({
       command: name,
-      description: trimLine(`Pi: ${slashCommand.description ?? slashCommand.source}`, 256),
+      description,
     });
   }
 

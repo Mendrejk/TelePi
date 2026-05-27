@@ -113,6 +113,7 @@ async function runPromptFlow(
   const toolCounts = new Map<string, number>();
   const activeTools = new Map<string, string>();
   let accumulatedText = "";
+  let activeStreamCursor = 0;
 
   function formatToolDisplay(toolName: string, args?: any): string {
     if (!args) return toolName;
@@ -139,6 +140,7 @@ async function runPromptFlow(
   let isFlushing = false;
   let flushPending = false;
   let finalized = false;
+  let hasNotifiedText = false;
   const toolVerbosity = getToolVerbosity(target);
 
   const typingInterval = setInterval(() => {
@@ -158,7 +160,8 @@ async function runPromptFlow(
   };
 
   const renderPreview = (): RenderedChunk => {
-    let previewText = buildStreamingPreview(accumulatedText || "*Processing...*");
+    let unstreamedText = accumulatedText.slice(activeStreamCursor) || "*Processing...*";
+    let previewText = buildStreamingPreview(unstreamedText);
     
     if (toolVerbosity === "summary" && activeTools.size > 0) {
       const names = Array.from(new Set(activeTools.values())).join(", ");
@@ -212,7 +215,8 @@ async function runPromptFlow(
   };
 
   const flushResponse = async (force = false): Promise<void> => {
-    if (!accumulatedText && activeTools.size === 0 && !force) {
+    let unstreamedText = accumulatedText.slice(activeStreamCursor);
+    if (!unstreamedText && activeTools.size === 0 && !force) {
       return;
     }
     if (!responseMessageId) {
@@ -229,8 +233,17 @@ async function runPromptFlow(
       return;
     }
 
-    const nextText = renderPreview();
-    if (nextText.text === lastRenderedText) {
+    const chunks = splitMarkdownForTelegram(unstreamedText || "*Processing...*");
+    const isRollover = chunks.length > 1;
+
+    let nextText: RenderedChunk;
+    if (isRollover) {
+      nextText = chunks[0];
+    } else {
+      nextText = renderPreview();
+    }
+
+    if (nextText.text === lastRenderedText && !isRollover) {
       return;
     }
 
@@ -239,10 +252,18 @@ async function runPromptFlow(
       await safeEditMessage(bot, target, responseMessageId, nextText.text, {
         parseMode: nextText.parseMode,
         fallbackText: nextText.fallbackText,
-        replyMarkup: abortKeyboard,
+        replyMarkup: isRollover ? undefined : abortKeyboard,
       });
       lastRenderedText = nextText.text;
       lastEditAt = Date.now();
+
+      if (isRollover) {
+        activeStreamCursor += chunks[0].sourceText.length;
+        responseMessageId = undefined;
+        responseMessagePromise = undefined;
+        lastRenderedText = "";
+        flushPending = true; // Force immediate flush for the next chunk
+      }
     } finally {
       isFlushing = false;
       if (flushPending) {
@@ -280,6 +301,27 @@ async function runPromptFlow(
         console.error("Failed to clear Abort button", error);
       }
     }
+  };
+
+  const commitStream = async (): Promise<void> => {
+    if (responseMessagePromise) await responseMessagePromise;
+    if (!responseMessageId) return;
+    
+    let unstreamedText = accumulatedText.slice(activeStreamCursor);
+    if (!unstreamedText && activeTools.size === 0) {
+      await bot.api.deleteMessage(target.chatId, responseMessageId).catch(() => {});
+    } else {
+      const chunks = splitMarkdownForTelegram(unstreamedText || renderPreview().text);
+      await safeEditMessage(bot, target, responseMessageId, chunks[0].text, {
+         parseMode: chunks[0].parseMode,
+         fallbackText: chunks[0].fallbackText,
+      }).catch(() => {});
+      activeStreamCursor += unstreamedText ? chunks[0].sourceText.length : 0;
+    }
+    
+    responseMessageId = undefined;
+    responseMessagePromise = undefined;
+    lastRenderedText = "";
   };
 
   const deliverRenderedChunks = async (chunks: RenderedChunk[], lastChunkReplyMarkup?: InlineKeyboard): Promise<void> => {
@@ -344,7 +386,7 @@ async function runPromptFlow(
       statsFooter = `\n\n_Context: ${contextPercent}% | Cost: $${currentCost.toFixed(3)} (+$${Math.max(0, turnCost).toFixed(3)})_`;
     }
 
-    const finalText = buildFinalResponseText(accumulatedText);
+    const finalText = buildFinalResponseText(accumulatedText.slice(activeStreamCursor));
     const textWithFooter = finalText ? `${finalText}${statsFooter}` : statsFooter;
     const keyboard = new InlineKeyboard()
       .text("🗜️ Compact Session", "pi_compact")
@@ -388,7 +430,8 @@ async function runPromptFlow(
       },
     },
     uiContext: createTelegramUIContext({
-      notify: (message, type) => {
+      notify: async (message, type) => {
+        await commitStream();
         const rendered = renderExtensionNotice(message, type);
         void sendTextMessage(bot.api, target, rendered.text, {
           parseMode: rendered.parseMode,
@@ -397,11 +440,21 @@ async function runPromptFlow(
           console.error("Failed to send extension notification", error);
         });
       },
-      select: (title, choices, dialogOptions) => extensionDialogs.openSelect(target, title, choices, dialogOptions),
-      confirm: (title, message, dialogOptions) => extensionDialogs.openConfirm(target, title, message, dialogOptions),
-      input: (title, placeholder, dialogOptions) => extensionDialogs.openInput(target, title, placeholder, dialogOptions),
+      select: async (title, choices, dialogOptions) => {
+        await commitStream();
+        return extensionDialogs.openSelect(target, title, choices, dialogOptions);
+      },
+      confirm: async (title, message, dialogOptions) => {
+        await commitStream();
+        return extensionDialogs.openConfirm(target, title, message, dialogOptions);
+      },
+      input: async (title, placeholder, dialogOptions) => {
+        await commitStream();
+        return extensionDialogs.openInput(target, title, placeholder, dialogOptions);
+      },
     }),
-    onError: (error) => {
+    onError: async (error) => {
+      await commitStream();
       const rendered = renderExtensionError(error.extensionPath, error.event, error.error);
       void sendTextMessage(bot.api, target, rendered.text, {
         parseMode: rendered.parseMode,
@@ -418,6 +471,19 @@ async function runPromptFlow(
 
   const unsubscribe = piSession.subscribe({
     onTextDelta: (delta) => {
+      if (!hasNotifiedText) {
+        hasNotifiedText = true;
+        void commitStream().then(() => {
+          accumulatedText += delta;
+          if (!responseMessageId) {
+            void ensureResponseMessage().then(() => scheduleFlush());
+          } else {
+            scheduleFlush();
+          }
+        });
+        return;
+      }
+
       accumulatedText += delta;
       if (!responseMessageId) {
         void ensureResponseMessage()
@@ -564,7 +630,7 @@ async function runPromptFlow(
         statsFooter = `\n\n_Context: ${contextPercent}% | Cost: $${currentCost.toFixed(3)} (+$${Math.max(0, turnCost).toFixed(3)})_`;
       }
 
-      const combinedText = buildFinalResponseText(renderPromptFailure(accumulatedText, error));
+      const combinedText = buildFinalResponseText(renderPromptFailure(accumulatedText.slice(activeStreamCursor), error));
       const textWithFooter = combinedText ? `${combinedText}${statsFooter}` : statsFooter;
       const chunks = splitMarkdownForTelegram(textWithFooter);
       const keyboard = new InlineKeyboard()
