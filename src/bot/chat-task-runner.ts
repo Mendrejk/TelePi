@@ -6,7 +6,7 @@ export interface ChatTaskRunner {
     target: PiSessionContext,
     promptText: string,
     task: () => Promise<void>,
-  ): "started" | "busy";
+  ): "started" | "queued";
 }
 
 export function createChatTaskRunner(deps: {
@@ -16,31 +16,60 @@ export function createChatTaskRunner(deps: {
 }): ChatTaskRunner {
   const runningContexts = new Set<string>();
   const pendingTasks = new Set<Promise<void>>();
+  const taskQueues = new Map<string, Array<() => Promise<void>>>();
+
+  const processQueue = async (contextKey: string, target: PiSessionContext): Promise<void> => {
+    const queue = taskQueues.get(contextKey);
+    if (!queue || queue.length === 0) {
+      runningContexts.delete(contextKey);
+      taskQueues.delete(contextKey);
+      deps.endProcessing(target);
+      return;
+    }
+
+    const { task, promptText } = queue.shift() as any;
+    
+    let taskPromise!: Promise<void>;
+    taskPromise = (async () => {
+      try {
+        await task();
+      } catch (error) {
+        deps.onTaskError(error, target, promptText);
+      } finally {
+        pendingTasks.delete(taskPromise);
+        void processQueue(contextKey, target);
+      }
+    })();
+
+    pendingTasks.add(taskPromise);
+  };
 
   return {
     tryStartPrompt(target, promptText, task) {
       const contextKey = getPiSessionContextKey(target);
+      
       if (runningContexts.has(contextKey)) {
-        return "busy";
+        let queue = taskQueues.get(contextKey);
+        if (!queue) {
+          queue = [];
+          taskQueues.set(contextKey, queue);
+        }
+        (queue as any).push({ task, promptText });
+        return "queued";
       }
 
       runningContexts.add(contextKey);
       deps.beginProcessing(target, promptText);
 
-      let taskPromise!: Promise<void>;
-      taskPromise = (async () => {
-        try {
-          await task();
-        } catch (error) {
-          deps.onTaskError(error, target, promptText);
-        } finally {
-          runningContexts.delete(contextKey);
-          deps.endProcessing(target);
-          pendingTasks.delete(taskPromise);
-        }
-      })();
+      let queue = taskQueues.get(contextKey);
+      if (!queue) {
+        queue = [];
+        taskQueues.set(contextKey, queue);
+      }
+      (queue as any).push({ task, promptText });
+      
+      void processQueue(contextKey, target);
 
-      pendingTasks.add(taskPromise);
       return "started";
     },
   };

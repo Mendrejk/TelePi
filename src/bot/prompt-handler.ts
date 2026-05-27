@@ -694,9 +694,6 @@ export function createPromptHandler(options: CreatePromptHandlerOptions): Handle
           }
         }
       }
-
-      await sendBusyReply(ctx);
-      return false;
     }
 
     const result = taskRunner.tryStartPrompt(
@@ -704,9 +701,11 @@ export function createPromptHandler(options: CreatePromptHandlerOptions): Handle
       userText,
       () => runPromptFlow({ ensureActiveSession, ...promptFlowDeps }, ctx, target, userText, preloadedSlashCommands, images),
     );
-    if (result === "busy") {
-      await sendBusyReply(ctx);
-      return false;
+    if (result === "queued") {
+      const html = "<i>Prompt queued and will execute when the agent is free.</i>";
+      const plain = "Prompt queued and will execute when the agent is free.";
+      await sendTextMessage(ctx.api, target, html, { parseMode: "HTML", fallbackText: plain });
+      return true;
     }
 
     return true;
