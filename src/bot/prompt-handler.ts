@@ -118,16 +118,16 @@ async function runPromptFlow(
     if (!args) return toolName;
     let detail = "";
     if (toolName === "bash" && typeof args.command === "string") {
-      detail = args.command.length > 30 ? args.command.slice(0, 27) + "..." : args.command;
+      detail = args.command.length > 45 ? args.command.slice(0, 42) + "..." : args.command;
     } else if (["read", "write", "edit"].includes(toolName) && typeof args.path === "string") {
       const parts = args.path.split("/");
       detail = parts[parts.length - 1];
     } else if (toolName === "web_search" && typeof args.query === "string") {
-      detail = args.query.length > 30 ? args.query.slice(0, 27) + "..." : args.query;
+      detail = args.query.length > 45 ? args.query.slice(0, 42) + "..." : args.query;
     } else if (toolName === "web_search" && Array.isArray(args.queries) && args.queries.length > 0 && typeof args.queries[0] === "string") {
-      detail = args.queries[0].length > 30 ? args.queries[0].slice(0, 27) + "..." : args.queries[0];
+      detail = args.queries[0].length > 45 ? args.queries[0].slice(0, 42) + "..." : args.queries[0];
     } else if (toolName === "fetch_content" && typeof args.url === "string") {
-      detail = args.url.length > 30 ? args.url.slice(0, 27) + "..." : args.url;
+      detail = args.url.length > 45 ? args.url.slice(0, 42) + "..." : args.url;
     }
     return detail ? `${toolName}(${detail})` : toolName;
   }
