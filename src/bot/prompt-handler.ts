@@ -265,8 +265,10 @@ async function runPromptFlow(
         lastRenderedText = "";
         flushPending = true; // Force immediate flush for the next chunk
       }
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("message to edit not found")) {
+    } catch (error: any) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const errorDesc = error.description ? String(error.description) : "";
+      if (errorMsg.includes("message to edit not found") || errorDesc.includes("message to edit not found")) {
         // Message was likely deleted concurrently by deleteProcessingMessage; ignore and let next cycle recreate it.
       } else {
         console.error("Failed to update Telegram response message in flushResponse:", error);
@@ -454,7 +456,6 @@ async function runPromptFlow(
     },
     uiContext: createTelegramUIContext({
       notify: async (message, type) => {
-        if (!agentEnded && !finalized) await commitStream();
         const rendered = renderExtensionNotice(message, type);
         void sendTextMessage(bot.api, target, rendered.text, {
           parseMode: rendered.parseMode,
