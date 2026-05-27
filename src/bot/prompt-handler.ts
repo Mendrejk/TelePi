@@ -324,6 +324,15 @@ async function runPromptFlow(
     lastRenderedText = "";
   };
 
+  const deleteProcessingMessage = async (): Promise<void> => {
+    if (responseMessagePromise) await responseMessagePromise;
+    if (!responseMessageId) return;
+    await bot.api.deleteMessage(target.chatId, responseMessageId).catch(() => {});
+    responseMessageId = undefined;
+    responseMessagePromise = undefined;
+    lastRenderedText = "";
+  };
+
   const deliverRenderedChunks = async (chunks: RenderedChunk[], lastChunkReplyMarkup?: InlineKeyboard): Promise<void> => {
     if (chunks.length === 0) {
       return;
@@ -471,10 +480,11 @@ async function runPromptFlow(
 
   const unsubscribe = piSession.subscribe({
     onTextDelta: (delta) => {
+      accumulatedText += delta;
+
       if (!hasNotifiedText) {
         hasNotifiedText = true;
-        void commitStream().then(() => {
-          accumulatedText += delta;
+        void deleteProcessingMessage().then(() => {
           if (!responseMessageId) {
             void ensureResponseMessage().then(() => scheduleFlush());
           } else {
@@ -484,15 +494,10 @@ async function runPromptFlow(
         return;
       }
 
-      accumulatedText += delta;
       if (!responseMessageId) {
         void ensureResponseMessage()
-          .then(() => {
-            scheduleFlush();
-          })
-          .catch((error) => {
-            console.error("Failed to send initial Telegram response message", error);
-          });
+          .then(() => scheduleFlush())
+          .catch((error) => console.error("Failed to send initial Telegram response message", error));
         return;
       }
 
