@@ -271,10 +271,13 @@ async function runPromptFlow(
         console.error("Failed to update Telegram response message in flushResponse:", error);
       }
     } finally {
-      isFlushing = false;
-      if (flushPending) {
-        flushPending = false;
-        scheduleFlush();
+      // Don't accidentally un-set flushing if deleteProcessingMessage wiped our state
+      if (responseMessageId) {
+        isFlushing = false;
+        if (flushPending) {
+          flushPending = false;
+          scheduleFlush();
+        }
       }
     }
   };
@@ -338,6 +341,8 @@ async function runPromptFlow(
     responseMessageId = undefined;
     responseMessagePromise = undefined;
     lastRenderedText = "";
+    isFlushing = false;
+    flushPending = false;
     await bot.api.deleteMessage(target.chatId, idToDelete).catch(() => {});
   };
 
