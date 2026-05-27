@@ -158,13 +158,14 @@ async function runPromptFlow(
   };
 
   const renderPreview = (): RenderedChunk => {
-    let previewText = buildStreamingPreview(accumulatedText || "_Processing..._");
+    let previewText = buildStreamingPreview(accumulatedText || "<i>Processing...</i>");
     
     if (toolVerbosity === "summary" && activeTools.size > 0) {
       const names = Array.from(new Set(activeTools.values())).join(", ");
-      previewText += `\n\n_Running tools: ${names}..._`;
+      previewText += `\n\n<i>Running tools: ${names}...</i>`;
     }
 
+    // Pass HTML tags verbatim in the preview (TelePi format parser supports raw HTML fallback)
     return renderMarkdownChunkWithinLimit(previewText);
   };
 
