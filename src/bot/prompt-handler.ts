@@ -509,12 +509,13 @@ async function runPromptFlow(
       activeTools.set(toolCallId, formatToolDisplay(toolName, args));
       scheduleFlush();
 
-      if (toolVerbosity === "summary") {
-        toolCounts.set(toolName, (toolCounts.get(toolName) ?? 0) + 1);
-        return;
-      }
-
-      if (toolVerbosity === "none") {
+      if (toolVerbosity === "summary" || toolVerbosity === "none") {
+        if (accumulatedText.length > 0 && !accumulatedText.match(/\s$/)) {
+          accumulatedText += "\n\n";
+        }
+        if (toolVerbosity === "summary") {
+          toolCounts.set(toolName, (toolCounts.get(toolName) ?? 0) + 1);
+        }
         return;
       }
 
