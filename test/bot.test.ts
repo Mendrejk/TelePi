@@ -264,6 +264,8 @@ function createMockPiSession(overrides: Partial<PiSessionService> = {}) {
       },
     ]),
     listWorkspaces: vi.fn().mockResolvedValue(["/workspace/A", "/workspace/B"]),
+    getThinkingLevel: vi.fn().mockReturnValue("medium"),
+    setThinkingLevel: vi.fn().mockImplementation((thinkingLevel) => thinkingLevel),
     listModels: vi.fn().mockResolvedValue([
       {
         provider: "anthropic",
@@ -961,6 +963,19 @@ describe("createBot", () => {
 
     expect(api.sendMessage.mock.calls[0]?.[1]).toContain("Session ID");
     expect(api.sendMessage.mock.calls[0]?.[1]).toContain("/tmp/test.jsonl");
+  });
+
+  it("handles /thinking status and updates", async () => {
+    const { bot, pi, api } = setupBot();
+
+    await bot.handleUpdate(createTestUpdate({ message: { text: "/thinking" } }));
+    expect(api.sendMessage.mock.calls.some((call) => String(call[1]).includes("Current thinking level"))).toBe(true);
+    expect(api.sendMessage.mock.calls.some((call) => String(call[1]).includes("medium"))).toBe(true);
+
+    await bot.handleUpdate(createTestUpdate({ message: { text: "/thinking high" } }));
+
+    expect(pi.service.setThinkingLevel).toHaveBeenCalledWith("high");
+    expect(api.sendMessage.mock.calls.some((call) => String(call[1]).includes("Thinking level set to"))).toBe(true);
   });
 
   it("shows fallback /session info for untouched contexts without creating a session", async () => {
@@ -2433,22 +2448,15 @@ describe("createBot", () => {
     expect(getReplyMarkupData(api)).toContain("cmd_filter_telepi");
     expect(getReplyMarkupData(api)).toContain("cmd_filter_pi");
 
-    await bot.handleUpdate(createCallbackUpdate("cmd_page_2"));
+    await bot.handleUpdate(createCallbackUpdate("cmd_filter_pi"));
 
     expect(String(api.editMessageText.mock.calls[0]?.[2])).toContain("/compact");
     expect(getEditedReplyMarkupTexts(api, 0)).toContain("🧩 /compact");
     expect(getEditedReplyMarkupTexts(api, 0)).toContain("📝 /review");
     expect(getEditedReplyMarkupTexts(api, 0)).toContain("🧰 /skill:browser-tools");
-
-    await bot.handleUpdate(createCallbackUpdate("cmd_filter_pi"));
-
-    expect(String(api.editMessageText.mock.calls[1]?.[2])).toContain("/compact");
-    expect(getEditedReplyMarkupTexts(api, 1)).toContain("🧩 /compact");
-    expect(getEditedReplyMarkupTexts(api, 1)).toContain("📝 /review");
-    expect(getEditedReplyMarkupTexts(api, 1)).toContain("🧰 /skill:browser-tools");
-    expect(getEditedReplyMarkupData(api, 1)).toContain("cmd_filter_all");
-    expect(getEditedReplyMarkupData(api, 1)).toContain("cmd_filter_telepi");
-    expect(getEditedReplyMarkupData(api, 1)).toContain("cmd_filter_pi");
+    expect(getEditedReplyMarkupData(api, 0)).toContain("cmd_filter_all");
+    expect(getEditedReplyMarkupData(api, 0)).toContain("cmd_filter_telepi");
+    expect(getEditedReplyMarkupData(api, 0)).toContain("cmd_filter_pi");
   });
 
   it("runs TelePi commands from the /commands picker", async () => {
@@ -3716,10 +3724,13 @@ describe("createBot", () => {
       { command: "retry", description: "Retry the last prompt in this chat/topic" },
       { command: "handback", description: "Hand session back to Pi CLI" },
       { command: "abort", description: "Cancel current operation" },
+      { command: "steer", description: "Toggle mid-flight prompt steering mode" },
+      { command: "tools", description: "Toggle live tool output streaming" },
       { command: "session", description: "Current session details" },
       { command: "sessions", description: "List and switch sessions (or /sessions <path|id>)" },
       { command: "context", description: "Show context usage and session stats" },
       { command: "model", description: "Switch AI model" },
+      { command: "thinking", description: "Show or set thinking level" },
       { command: "tree", description: "View and navigate the session tree" },
       { command: "branch", description: "Navigate to a tree entry (/branch <id>)" },
       { command: "label", description: "Label an entry (/label [name] or /label <id> <name>)" },

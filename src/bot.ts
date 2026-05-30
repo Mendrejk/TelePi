@@ -3,6 +3,7 @@ import { readFile, unlink } from "node:fs/promises";
 import { InlineKeyboard, Bot, type Context } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
 import type { SlashCommandInfo } from "@mariozechner/pi-coding-agent";
+import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { ImageContent } from "@mariozechner/pi-ai";
 
 import type { TelePiConfig } from "./config.js";
@@ -72,6 +73,7 @@ const EDIT_DEBOUNCE_MS = 1500;
 const TYPING_INTERVAL_MS = 4500;
 const EXTENSION_UI_TIMEOUT_MS = 60_000;
 const DEFAULT_IMAGE_PROMPT = "Please analyze this image.";
+const THINKING_LEVELS: readonly ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
 const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -567,6 +569,84 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
   });
   const { renderModelPicker, handleModelCommand } = modelCommandHandlers;
 
+  const handleThinkingCommand = async (
+    ctx: Context,
+    target: PiSessionContext,
+    commandText?: string,
+  ): Promise<void> => {
+    const rawText = commandText ?? ctx.message?.text ?? "";
+    const requestedLevel = rawText.replace(/^\/thinking(?:@\w+)?\s*/i, "").trim().toLowerCase();
+
+    const existing = getExistingSession(target);
+    const hadActiveSession = existing?.hasActiveSession() === true;
+    const piSession = await getOrCreateSession(target);
+
+    if (!piSession.hasActiveSession()) {
+      try {
+        await piSession.newSession();
+      } catch (error) {
+        const failure = renderPrefixedError("Failed to create session", error);
+        await safeReply(ctx, failure.text, {
+          fallbackText: failure.fallbackText,
+          parseMode: failure.parseMode,
+        }, target);
+        return;
+      }
+    }
+
+    if (!hadActiveSession) {
+      await surfaceStartupErrorDiagnostics(ctx, target, piSession.getInfo());
+    }
+
+    const currentLevel = piSession.getThinkingLevel() ?? "off";
+    if (!requestedLevel) {
+      const usage = [
+        `<b>Current thinking level:</b> <code>${escapeHTML(currentLevel)}</code>`,
+        "",
+        "Set it with:",
+        "<code>/thinking off</code>",
+        "<code>/thinking minimal</code>",
+        "<code>/thinking low</code>",
+        "<code>/thinking medium</code>",
+        "<code>/thinking high</code>",
+        "<code>/thinking xhigh</code>",
+      ].join("\n");
+      const fallbackText = [
+        `Current thinking level: ${currentLevel}`,
+        "",
+        "Set it with:",
+        "/thinking off",
+        "/thinking minimal",
+        "/thinking low",
+        "/thinking medium",
+        "/thinking high",
+        "/thinking xhigh",
+      ].join("\n");
+      await safeReply(ctx, usage, { fallbackText }, target);
+      return;
+    }
+
+    if (!THINKING_LEVELS.includes(requestedLevel as ThinkingLevel)) {
+      const valid = THINKING_LEVELS.join(", ");
+      await safeReply(ctx, escapeHTML(`Unknown thinking level: ${requestedLevel}\nValid levels: ${valid}`), {
+        fallbackText: `Unknown thinking level: ${requestedLevel}\nValid levels: ${valid}`,
+      }, target);
+      return;
+    }
+
+    if (isBusy(target)) {
+      await safeReply(ctx, escapeHTML("Cannot change thinking level while a prompt is running."), {
+        fallbackText: "Cannot change thinking level while a prompt is running.",
+      }, target);
+      return;
+    }
+
+    const nextLevel = piSession.setThinkingLevel(requestedLevel as ThinkingLevel);
+    await safeReply(ctx, `<b>Thinking level set to:</b> <code>${escapeHTML(nextLevel)}</code>`, {
+      fallbackText: `Thinking level set to: ${nextLevel}`,
+    }, target);
+  };
+
   const treeCommandHandlers = createTreeCommandHandlers({
     getContextKey,
     getExistingSession,
@@ -619,6 +699,9 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
         return;
       case "model":
         await handleModelCommand(ctx, target);
+        return;
+      case "thinking":
+        await handleThinkingCommand(ctx, target, "/thinking");
         return;
       case "tree":
         await handleTreeCommand(ctx, target, "/tree");
@@ -748,6 +831,15 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
     }
 
     await handleModelCommand(ctx, target);
+  });
+
+  bot.command("thinking", async (ctx) => {
+    const target = getTelegramTarget(ctx);
+    if (!target) {
+      return;
+    }
+
+    await handleThinkingCommand(ctx, target);
   });
 
   bot.command("tree", async (ctx) => {

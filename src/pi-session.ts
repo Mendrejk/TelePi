@@ -70,6 +70,7 @@ export interface PiSessionInfo {
   sessionName?: string;
   modelFallbackMessage?: string;
   model?: string;
+  thinkingLevel?: ThinkingLevel;
   diagnostics?: PiSessionDiagnostic[];
 }
 
@@ -638,6 +639,7 @@ export class PiSessionService {
         sessionName: undefined,
         modelFallbackMessage: undefined,
         model: undefined,
+        thinkingLevel: undefined,
       };
     }
 
@@ -654,6 +656,7 @@ export class PiSessionService {
       sessionName: session.sessionName,
       modelFallbackMessage: this.handle.runtime.modelFallbackMessage,
       model: model ? `${model.provider}/${model.id}` : undefined,
+      thinkingLevel: session.thinkingLevel,
       ...(diagnostics ? { diagnostics } : {}),
     };
   }
@@ -818,6 +821,15 @@ export class PiSessionService {
       session.setThinkingLevel(thinkingLevel);
     }
     return `${model.provider}/${model.id}`;
+  }
+
+  getThinkingLevel(): ThinkingLevel | undefined {
+    return this.getSession().thinkingLevel;
+  }
+
+  setThinkingLevel(thinkingLevel: ThinkingLevel): ThinkingLevel {
+    this.getSession().setThinkingLevel(thinkingLevel);
+    return thinkingLevel;
   }
 
   async resolveSessionReference(sessionReference: string): Promise<ResolvedSessionReference> {
@@ -1276,6 +1288,7 @@ export class PiSessionRegistry {
       sessionName: undefined,
       modelFallbackMessage: undefined,
       model: undefined,
+      thinkingLevel: undefined,
     };
   }
 

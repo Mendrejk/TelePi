@@ -502,6 +502,7 @@ describe("PiSessionService", () => {
       sessionName: undefined,
       modelFallbackMessage: "fallback-model",
       model: "anthropic/claude-sonnet-4-5",
+      thinkingLevel: "medium",
     });
   });
 
@@ -805,6 +806,7 @@ describe("PiSessionService", () => {
       sessionName: undefined,
       modelFallbackMessage: undefined,
       model: undefined,
+      thinkingLevel: undefined,
     });
     expect(() => service.getSession()).toThrow("Pi session is not initialized");
   });
@@ -848,6 +850,7 @@ describe("PiSessionService", () => {
       sessionName: undefined,
       modelFallbackMessage: undefined,
       model: undefined,
+      thinkingLevel: undefined,
     });
     expect(() => service.getSession()).toThrow("Pi session is not initialized");
   });
@@ -1151,6 +1154,7 @@ describe("PiSessionService", () => {
       sessionName: undefined,
       modelFallbackMessage: undefined,
       model: undefined,
+      thinkingLevel: undefined,
     });
   });
 
@@ -1172,6 +1176,7 @@ describe("PiSessionService", () => {
       sessionName: undefined,
       modelFallbackMessage: undefined,
       model: undefined,
+      thinkingLevel: undefined,
     });
   });
 
@@ -1825,6 +1830,7 @@ describe("PiSessionService", () => {
       sessionName: undefined,
       modelFallbackMessage: undefined,
       model: undefined,
+      thinkingLevel: undefined,
     });
   });
 
@@ -2078,6 +2084,7 @@ describe("PiSessionService", () => {
       sessionName: undefined,
       modelFallbackMessage: undefined,
       model: undefined,
+      thinkingLevel: undefined,
     });
   });
 

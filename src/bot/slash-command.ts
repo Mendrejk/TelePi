@@ -21,6 +21,7 @@ export const TELEPI_BOT_COMMANDS = [
   { command: "sessions", description: "List and switch sessions (or /sessions <path|id>)" },
   { command: "context", description: "Show context usage and session stats" },
   { command: "model", description: "Switch AI model" },
+  { command: "thinking", description: "Show or set thinking level" },
   { command: "tree", description: "View and navigate the session tree" },
   { command: "branch", description: "Navigate to a tree entry (/branch <id>)" },
   { command: "label", description: "Label an entry (/label [name] or /label <id> <name>)" },
