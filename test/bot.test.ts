@@ -334,6 +334,7 @@ function createMockPiSession(overrides: Partial<PiSessionService> = {}) {
     prompt: vi.fn().mockResolvedValue(undefined),
     getSession: vi.fn().mockReturnValue({
       agent: { waitForIdle: vi.fn().mockResolvedValue(undefined) },
+      sessionManager: { appendCustomEntry: vi.fn() },
     }),
     fork: vi.fn().mockResolvedValue({ cancelled: false }),
     reload: vi.fn().mockResolvedValue(undefined),
@@ -2369,6 +2370,20 @@ describe("createBot", () => {
     expect(pi.service.prompt).toHaveBeenCalledWith("/compact focus recent work");
   });
 
+  it("normalizes bot-addressed Pi slash commands without arguments", async () => {
+    const { bot, pi } = setupBot({
+      piSessionOverrides: {
+        listSlashCommands: vi.fn().mockResolvedValue([
+          { name: "compact", description: "Compact context", source: "extension", path: "/ext/compact.ts" },
+        ]),
+      },
+    });
+
+    await bot.handleUpdate(createTestUpdate({ message: { text: "/compact@telepi_test_bot" } }));
+
+    expect(pi.service.prompt).toHaveBeenCalledWith("/compact");
+  });
+
   it("ignores slash commands addressed to another bot", async () => {
     const { bot, pi, api } = setupBot({
       piSessionOverrides: {
@@ -2469,6 +2484,14 @@ describe("createBot", () => {
     expect(compactButton).toBeDefined();
 
     await bot.handleUpdate(createCallbackUpdate(compactButton!.callback_data));
+
+    expect(pi.service.prompt).toHaveBeenCalledWith("/compact");
+  });
+
+  it("runs the response compact button through the Pi /compact command path", async () => {
+    const { bot, pi } = setupBot();
+
+    await bot.handleUpdate(createCallbackUpdate("pi_compact"));
 
     expect(pi.service.prompt).toHaveBeenCalledWith("/compact");
   });

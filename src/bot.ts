@@ -808,19 +808,7 @@ export function createBot(config: TelePiConfig, sessionRegistry: PiSessionRegist
       return;
     }
 
-    if (isBusy(target)) {
-      await sendBusyReply(ctx);
-      return;
-    }
-
-    try {
-      await piSession.getSession().compact();
-      await safeReply(ctx, "✅ <b>Compaction complete.</b>", { fallbackText: "✅ Compaction complete." }, target);
-      await handleContextCommand(ctx, target);
-    } catch (error) {
-      console.error("Compaction failed:", error);
-      await safeReply(ctx, "❌ <b>Compaction failed.</b>", { fallbackText: "❌ Compaction failed." }, target);
-    }
+    await handleUserPrompt(ctx, target, "/compact");
   });
 
   bot.callbackQuery("pi_tts_play", async (ctx) => {
